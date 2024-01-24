@@ -117,6 +117,7 @@ function resetInputs() {
         // Reset to different values depending on what type of input it is
         if (inputs[input].type === 'number' && !inputs[input].classList.contains('large')) inputs[input].value = 0; // If it's a small number box
         else if (inputs[input].type === 'checkbox') inputs[input].checked = false; // Checkbox
+        else if (inputs[input].type === 'text') inputs[input].checked = false; // text
         else if (inputs[input].tagName === 'SELECT') inputs[input].value = 'None'; // Selector
         else inputs[input].value = '';
     }

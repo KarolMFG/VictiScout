@@ -7,7 +7,6 @@ const { EOL } = require('os');
 var thead = document.getElementsByTagName('thead')[0],
     tbody = document.getElementsByTagName('tbody')[0],
     warning = document.getElementById('warning'),
-
     processingSection = document.getElementById('processing'),
     fileInputButton = document.getElementById('input-file'),
     fileInputList = document.getElementsByClassName('input-list')[0],
@@ -15,6 +14,7 @@ var thead = document.getElementsByTagName('thead')[0],
     deleteButton = document.getElementById('delete-button'),
     outputFileName = document.getElementById('output-file'),
     transferButton = document.getElementById('transfer-button');
+    
 
 const acceptableFileTypes = ['application/json', '.json', 'text/csv', '.csv'];
 var fileBuffer = [];
@@ -28,55 +28,151 @@ if (fs.existsSync(localStorage.path) && fs.statSync(localStorage.path).size > 0)
     deleteButton.style.display = 'none';
 }
 
+function sortDataByAccuracy() {
+    // Get all rows in the tbody
+    const rows = Array.from(tbody.getElementsByTagName('tr'));
+
+    // Get the index of the Teleop Accuracy column
+    const accuracyIndex = Array.from(thead.getElementsByTagName('th')).findIndex(th => th.textContent.toLowerCase() === 'teleop accuracy');
+    // Sort rows based on Teleop Accuracy values
+    rows.sort((a, b) => {
+        const accuracyA = parseFloat(a.cells[accuracyIndex].textContent) || 0;
+        const accuracyB = parseFloat(b.cells[accuracyIndex].textContent) || 0;
+        return accuracyB - accuracyA; // Sort in descending order
+    });
+
+    // Remove existing rows from the tbody
+    rows.forEach(row => tbody.removeChild(row));
+
+    // Append sorted rows to the tbody
+    rows.forEach(row => tbody.appendChild(row));
+}
+document.getElementById('teleop-sort-button').addEventListener('click', function () {
+    sortDataByAccuracy();
+});
+function sortDataByAutoAccuracy() {
+    // Get all rows in the tbody
+    const rows = Array.from(tbody.getElementsByTagName('tr'));
+
+    // Get the index of the Auto Accuracy column
+    const accuracyIndex = Array.from(thead.getElementsByTagName('th')).findIndex(th => th.textContent.toLowerCase() === 'auto accuracy');
+    
+    // Sort rows based on Auto Accuracy values
+    rows.sort((a, b) => {
+        const accuracyA = parseFloat(a.cells[accuracyIndex].textContent) || 0;
+        const accuracyB = parseFloat(b.cells[accuracyIndex].textContent) || 0;
+        return accuracyB - accuracyA; // Sort in descending order
+    });
+
+    // Remove existing rows from the tbody
+    rows.forEach(row => tbody.removeChild(row));
+
+    // Append sorted rows to the tbody
+    rows.forEach(row => tbody.appendChild(row));
+}
+
+// Add event listener for the button triggering the sort
+document.getElementById('auto-sort-button').addEventListener('click', function () {
+    sortDataByAutoAccuracy();
+});
 
 function render(data) {
     // Make column headers.
     // Create <tr> element to put everything in.
     var tr = document.createElement('tr');
-    // Go through the first data object
-    for (prop in data[0]) {
-        // Make a new table cell
-        var th = document.createElement('th');
-        // ...with the content of the prettified name of the property
-        th.textContent = pname(prop);
-        // Put it into the row
-        tr.appendChild(th);
+
+    // Collect all unique properties from all data objects
+    var allProperties = new Set();
+    for (var pt in data) {
+        for (var prop in data[pt]) {
+            allProperties.add(prop);
+        }
     }
+
+    // Log all property names
+    console.log('All Properties:', Array.from(allProperties));
+
+    // Iterate over all properties and create headers
+    allProperties.forEach(function (prop) {
+        var th = document.createElement('th');
+        th.textContent = pname(prop);
+        tr.appendChild(th);
+    });
+
+    // Added new headers for Height and Chassis Size, wouldn't reccomend adding anymore headers in this array
+    var newHeaders = ['Height', 'Chassis Size', 'Teleop Accuracy', 'Auto Accuracy'];
+    newHeaders.forEach(function (header) {
+        var th = document.createElement('th');
+        th.textContent = header;
+        tr.appendChild(th);
+    });
     // Put the row into the table header
     thead.appendChild(tr);
-
     // For each object in the data array,
-    for (pt in data) {
+    for (var pt in data) {
         // Make a new table row
         tr = document.createElement('tr');
         var check = document.createElement('input');
-        // Go through all properties
-        for (prop in data[pt]) {
+        // Iterate over all properties
+        allProperties.forEach(function (prop) {
             // Make a table cell for each
             var td = document.createElement('td');
             // Fill table cell with that data property
-            td.textContent = data[pt][prop];
+            td.textContent = data[pt][prop] || ''; // Use default value if property is undefined
             // Put the cell into the row
             tr.appendChild(td);
-        }
+        });
+        // Add new input fields for Height and Chassis Size
+        ['height', 'chassis-size'].forEach(function (prop) {
+            var td = document.createElement('td');
+            var input = document.createElement('input');
+            input.type = 'text';
+            input.placeholder = pname(prop);
+            // Retrieve stored value from localStorage
+            var storedValue = localStorage.getItem(`${prop}-${data[pt].team}`);
+            input.value = storedValue || data[pt][prop] || '';
+            // Save value to localStorage when input changes
+            input.addEventListener('input', function () {
+                localStorage.setItem(`${prop}-${data[pt].team}`, input.value);
+            });
+            td.appendChild(input);
+            tr.appendChild(td);
+        });
+        // Calculate Teleop Accuracy and add a new cell for it
+        var teleopAccuracyCell = document.createElement('td');
+        var teleopNotesShot = parseInt(data[pt]['teleop-notes-shot']) || 0;
+        var teleopNotesMade = parseInt(data[pt]['teleop-notes-made']) || 0;
+        var teleopAccuracy = teleopNotesShot > 0 ? (teleopNotesMade / teleopNotesShot * 100).toFixed(2) + '%' : 'N/A';
+        teleopAccuracyCell.textContent = teleopAccuracy;
+        // Append the Teleop Accuracy cell to the row
+        tr.appendChild(teleopAccuracyCell);
+        // Calculate Auto Accuracy and add a new cell for it
+        var autoAccuracyCell = document.createElement('td');
+        var autoNotesShot = parseInt(data[pt]['auto-notes-shot']) || 0;
+        var autoNotesMade = parseInt(data[pt]['auto-notes-made']) || 0;
+        var autoAccuracy = autoNotesShot > 0 ? (autoNotesMade / autoNotesShot * 100).toFixed(2) + '%' : 'N/A';
+        autoAccuracyCell.textContent = autoAccuracy;
+        // Append the Auto Accuracy cell to the row
+        tr.appendChild(autoAccuracyCell);
+
         // Put this row into the document
         tbody.appendChild(tr);
-        check.className = 'generated'
+        check.className = 'generated';
         tr.appendChild(check);
     }
+    console.log('Entire Data Array:', data);
 }
-
 var inputs = document.querySelectorAll('input.generated');
 for (elem of inputs) {
     elem.setAttribute('type', 'checkbox');
 }
-
 transferButton.onclick = function () {
     ipc.send('transferData');
 }
-
 deleteButton.onclick = function () {
+    console.log('Delete button clicked');
     var array = JSON.parse(fs.readFileSync(localStorage.path));
+    console.log('Array before deletion:', array);
     for (box of inputs) {
         if (box.checked) {
             var matchNum = 0;
@@ -123,26 +219,7 @@ fileInputButton.onchange = function () {
     if (blocked) alert('Some files have been blocked due to improper type. (Only .json and .csv files accepted)');
 }
 
-outputButton.onclick = async function () {
-    if (fileBuffer.length < 1) {
-        return;
-    }
 
-    var content = await combineFiles();
-    var fd;
-    try {
-        fd = fs.openSync(localStorage.desktopPath + '/' + (outputFileName.value ? outputFileName.value : 'data') + '.csv', 'a');
-        fs.appendFileSync(fd, content);
-    } catch (err) {
-        if (err) throw err;
-    } finally {
-        if (fd !== undefined)
-            fs.closeSync(fd);
-    }
-    fileBuffer = [];
-    fileInputList.textContent = '';
-    outputFileName.value = '';
-}
 
 document.onclick = function (e) {
     if (Array.from(fileInputList.children).includes(e.target.parentElement)) {
@@ -235,7 +312,6 @@ function createSumField(csv, name, ...fields) {
         return total;
     });
 }
-
 async function combineFiles() {
     switch (fileBuffer[0].type) {
         case 'application/json':
@@ -249,7 +325,6 @@ async function combineFiles() {
             return;
     }
 }
-
 function parseFiles(fileParser) {
     var promises = [];
     for (let file of fileBuffer) {
@@ -277,4 +352,107 @@ function parseFiles(fileParser) {
             .filter((promise) => promise.status === 'fulfilled')
             .map((promise) => promise.value);
     });
+}
+
+document.getElementById('export-csv-button').addEventListener('click', function () {
+    exportCsv();
+});
+
+async function exportCsv() {
+    // Get all rows in the tbody
+    const rows = Array.from(tbody.getElementsByTagName('tr'));
+
+    // Ensure there is data to export
+    if (rows.length < 1) {
+        alert('No data to export.');
+        return;
+    }
+
+    try {
+        // Get column headers
+        const headers = Array.from(thead.getElementsByTagName('th')).map(th => th.textContent);
+
+        // Create CSV content from the table data, including headers
+        const content = [headers.join(',')].concat(rows.map(row => Array.from(row.cells).map(cell => cell.textContent).join(','))).join('\n');
+
+        // Ensure there is data to export after combining files
+        if (!content || content.trim() === '') {
+            alert('No data to export.');
+            return;
+        }
+
+        // Create a Blob from the CSV content
+        const blob = new Blob([content], { type: 'text/csv' });
+
+        // Create a link element to trigger the download
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+
+        // Set the filename for the exported CSV file using "VictiScout - MM/DD/YY" format
+        const currentDate = new Date();
+        const formattedDate = `${currentDate.getMonth() + 1}-${currentDate.getDate()}-${currentDate.getFullYear().toString().slice(-2)}`;
+        a.download = `VictiScout_${formattedDate}.csv`;
+
+        // Append the link to the document and trigger the download
+        document.body.appendChild(a);
+        a.click();
+
+        // Remove the link from the document
+        document.body.removeChild(a);
+    } catch (error) {
+        console.error('Error exporting CSV:', error);
+        alert('Error exporting CSV. Please check the console for details.');
+    }
+}
+function colorRows(color) {
+    const rows = Array.from(tbody.getElementsByTagName('tr'));
+
+    rows.forEach((row, index) => {
+        // Calculate alternating colors based on the provided color
+        const alternatingColor = index % 2 === 0 ? color : getDarkerColor(color);
+
+        // Apply the alternating background color to the row
+        row.style.backgroundColor = alternatingColor;
+    });
+}
+
+function getDarkerColor(color) {
+    // Convert the color to RGB values
+    const rgb = hexToRgb(color);
+
+    // Darken the RGB values
+    const darkerRgb = darkenRgb(rgb.r, rgb.g, rgb.b, 20);
+
+    // Convert the darker RGB values back to hex
+    const darkerColor = rgbToHex(darkerRgb.r, darkerRgb.g, darkerRgb.b);
+
+    return darkerColor;
+}
+
+function hexToRgb(hex) {
+    // Remove the hash from the hex color
+    hex = hex.replace(/^#/, '');
+
+    // Parse the hex color into RGB values
+    const bigint = parseInt(hex, 16);
+    const r = (bigint >> 16) & 255;
+    const g = (bigint >> 8) & 255;
+    const b = bigint & 255;
+
+    return { r, g, b };
+}
+
+function darkenRgb(r, g, b, percentage) {
+    // Darken the RGB values by a percentage
+    const factor = 1 - percentage / 100;
+    const darkenedR = Math.round(r * factor);
+    const darkenedG = Math.round(g * factor);
+    const darkenedB = Math.round(b * factor);
+
+    return { r: darkenedR, g: darkenedG, b: darkenedB };
+}
+
+function rgbToHex(r, g, b) {
+    // Convert the RGB values to hex
+    return `#${(1 << 24 | r << 16 | g << 8 | b).toString(16).slice(1)}`;
 }
